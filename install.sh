@@ -129,7 +129,7 @@ installmosquitto(){
 }
 
 installtelegraf(){
-	
+	docker network create wago
 	printf "${green}Téléchargement du fichier de configuration telegraf.conf${normal}\n"
 	mkdir -p /root/conf
 	wget $repo/main/conf/telegraf.conf.template -O /root/conf/telegraf.conf.template
@@ -146,7 +146,7 @@ installtelegraf(){
 }
 
 installinfluxdb(){
-	
+	docker network create wago
 	printf "${green}Création du volume v_influxdb${normal}\n"
 	docker volume create v_influxdb
 	printf "${green}Démarrage InfluxDB${normal}\n"
@@ -155,6 +155,7 @@ installinfluxdb(){
 }
 
 installgrafana(){
+	docker network create wago
 	mkdir -p /root/conf
 	mkdir -p /root/conf/provisioning/
 	mkdir -p /root/conf/provisioning/dashboards
@@ -170,6 +171,9 @@ installgrafana(){
 	printf "${green}Grafana démarré${normal}\n"
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	printf "${green}Aller sur http://$ipaddress:3000 pour y accéder${normal}\n"
+	printf "${green}A la première connexion, se connecter avec admin/admin${normal}\n"
+	printf "${green}Une datasource renvoyant vers la base Influxdb a été automatiquement ajoutée${normal}\n"
+	printf "${green}Un exemple de dashboard est disponible en naviguant vers Dashboards/Manage${normal}\n"
 }
 
 installportainer(){
@@ -247,6 +251,24 @@ while [ $opt != '' ]
 	  
 		1) clear; 
 			option_picked "Option $opt sélectionnée - Installation automatisée";
+			checkconnectivity;
+			if [ "$internet" -eq "1" ]; then
+				enableipforwarding;
+				enablentp;
+				checkdocker;
+					if [ "$docker" -eq "0" ]; then 
+						installdocker;
+					else
+						if [ "$dockeronsdcard" -eq "0" ]; then 
+						movedockertoSD;
+						fi
+					fi
+				installmosquitto;
+				installinfluxdb;
+				installtelegraf;
+				installgrafana;
+			fi
+			
 			show_menu;
 			;;	
         2) clear;

@@ -132,7 +132,7 @@ installtelegraf(){
 	
 	printf "${green}Téléchargement du fichier de configuration telegraf.conf${normal}\n"
 	mkdir -p /root/conf
-	wget $repo/main/conf/telegraf.conf -O /root/conf/telegraf.conf.template
+	wget $repo/main/conf/telegraf.conf.template -O /root/conf/telegraf.conf.template
 	brokerplaceholder='adresseipdubroker'	#default placeholder in telegraf.conf.template
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	read -p "Adresse IP broker [$ipaddress]: " mqttbroker
@@ -155,7 +155,14 @@ installinfluxdb(){
 }
 
 installgrafana(){
-	
+	mkdir -p /root/conf
+	mkdir -p /root/conf/provisioning/
+	mkdir -p /root/conf/provisioning/dashboards
+	mkdir -p /root/conf/provisioning/datasources
+	printf "${green}Téléchargement des fichiers de configurations${normal}\n"
+	wget $repo/main/conf/provisioning/dashboards/dashboards.yaml -O  /root/conf/provisioning/dashboards/dashboards.yaml
+	wget $repo/main/conf/provisioning/dashboards/example.json -O  /root/conf/provisioning/dashboards/example.json
+	wget $repo/main/conf/provisioning/datasources/influxdb.yaml -O  /root/conf/provisioning/datasources/influxdb.yaml
 	printf "${green}Création du volume v_grafana${normal}\n"
 	docker volume create v_grafana
 	printf "${green}Démarrage Grafana${normal}\n"

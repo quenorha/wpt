@@ -97,7 +97,7 @@ movedockertoSD() {
 	sleep 3
 	cp -r /home/docker /media/sd
 	#rm -r /home/docker
-	cp /root/config/daemon.json /etc/docker/daemon.json
+	cp /root/conf/daemon.json /etc/docker/daemon.json
 	rm /tmp/docker_20.10.5_armhf.ipk
 	printf "${green}Démarrage Docker${normal}\n"
 	/etc/init.d/dockerd start
@@ -111,8 +111,8 @@ installdocker(){
 	printf "${green}Téléchargement du package Docker${normal}\n"
 	wget https://github.com/WAGO/docker-ipk/releases/download/v1.0.4-beta/docker_20.10.5_armhf.ipk -O /tmp/docker_20.10.5_armhf.ipk 
 	printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
-	mkdir -p /root/config
-	wget $repo/main/conf/daemon.json -O /root/config/daemon.json
+	mkdir -p /root/conf
+	wget $repo/main/conf/daemon.json -O /root/conf/daemon.json
 	printf "${green}Installation Docker${normal}\n"
 	opkg install /tmp/docker_20.10.5_armhf.ipk
 	docker=1
@@ -122,26 +122,26 @@ installdocker(){
 
 installmosquitto(){
 	printf "${green}Téléchargement du fichier de configuration mosquitto.conf${normal}\n"
-	mkdir -p /root/config
-	wget $repo/main/conf/mosquitto.conf -O /root/config/mosquitto.conf 
+	mkdir -p /root/conf
+	wget $repo/main/conf/mosquitto.conf -O /root/conf/mosquitto.conf 
 	printf "${green}Démarrage Mosquitto${normal}\n"
-	docker run -d -p 1883:1883 -p 9001:9001 --restart=unless-stopped --name c_mosquitto -v /root/config/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2.0.11
+	docker run -d -p 1883:1883 -p 9001:9001 --restart=unless-stopped --name c_mosquitto -v /root/conf/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2.0.11
 }
 
 installtelegraf(){
 	
 	printf "${green}Téléchargement du fichier de configuration telegraf.conf${normal}\n"
-	mkdir -p /root/config
-	wget $repo/main/conf/telegraf.conf -O /root/config/telegraf.conf.template
+	mkdir -p /root/conf
+	wget $repo/main/conf/telegraf.conf -O /root/conf/telegraf.conf.template
 	brokerplaceholder='adresseipdubroker'	#default placeholder in telegraf.conf.template
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	read -p "Adresse IP broker [$ipaddress]: " mqttbroker
 	mqttbroker=${mqttbroker:-$ipaddress}
-	cp /root/config/telegraf.conf.template /root/config/telegraf.conf
-	sed -i "s/$brokerplaceholder/$mqttbroker/g" /root/config/telegraf.conf
+	cp /root/conf/telegraf.conf.template /root/conf/telegraf.conf
+	sed -i "s/$brokerplaceholder/$mqttbroker/g" /root/conf/telegraf.conf
 	printf "${green}Fichier telegraf.conf généré${normal}\n"
 	printf "${green}Démarrage Telegraf${normal}\n"
-	docker run -d --restart=unless-stopped  --net=wago  --name=c_telegraf -v /root/config/telegraf.conf:/etc/telegraf/telegraf.conf:ro telegraf:1.19.1
+	docker run -d --restart=unless-stopped  --net=wago  --name=c_telegraf -v /root/conf/telegraf.conf:/etc/telegraf/telegraf.conf:ro telegraf:1.19.1
 	printf "${green}Telegraf démarré${normal}\n"
 }
 
@@ -159,7 +159,7 @@ installgrafana(){
 	printf "${green}Création du volume v_grafana${normal}\n"
 	docker volume create v_grafana
 	printf "${green}Démarrage Grafana${normal}\n"
-	docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana grafana/grafana:8.0.0
+	docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:8.0.0
 	printf "${green}Grafana démarré${normal}\n"
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	printf "${green}Aller sur http://$ipaddress:3000 pour y accéder${normal}\n"

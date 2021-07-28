@@ -1,0 +1,9 @@
+{
+  "data-root":"/media/sd/docker",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "2m",
+    "max-file": "5" 
+  }
+}
+

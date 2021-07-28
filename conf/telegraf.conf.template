@@ -1,0 +1,34 @@
+[agent]
+  interval = "1s"
+  round_interval = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  collection_jitter = "0s"
+  flush_interval = "2s"
+  flush_jitter = "0s"
+  debug = false
+  quiet = false
+  omit_hostname = false
+ 
+###############################################################################
+#                            OUTPUT PLUGINS                                   #
+###############################################################################
+ 
+[[outputs.influxdb]]
+  urls = ["http://c_influxdb:8086"]
+  retention_policy = ""
+  write_consistency = "any"
+  timeout = "5s"
+   
+###############################################################################
+#                            INPUT PLUGINS                                    #
+############################################################################### 
+ 
+[[inputs.mqtt_consumer]]
+   servers = ["tcp://adresseipdubroker:1883"] # à adapter
+   qos = 0
+   connection_timeout = "30s"
+   topics = ["wago/+"]
+   client_id = "telegraf"
+   data_format = "influx"
+

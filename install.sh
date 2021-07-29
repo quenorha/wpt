@@ -24,9 +24,10 @@ show_menu(){
 	printf "${menu} ${number} 5)${menu} Installation de Docker sur la flash${normal}\n"
 	printf "${menu} ${number} 6)${menu} Installation de containers${normal}\n"
 	printf "${menu} ${number} 7)${menu} Suppression des containers, images et volumes Docker${normal}\n"
-	printf "${menu} ${number} 8)${menu} Désinstaller Docker${normal}\n"
-    printf "${menu} ${number} 9)${menu} Redémarrer le contrôleur${normal}\n"
-	printf "${menu} ${number} 10)${menu}Formater la carte SD${normal}\n"
+	printf "${menu} ${number} 8)${menu} Désinstallation de Docker${normal}\n"
+    printf "${menu} ${number} 9)${menu} Redémarrage du contrôleur${normal}\n"
+	printf "${menu} ${number} 10)${menu}Formatage la carte SD${normal}\n"
+	printf "${menu} ${number} 11)${menu}Génération de messages MQTT${normal}\n"
     printf "${menu}*********************************************${normal}\n"
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
     read opt
@@ -69,24 +70,26 @@ enablentp(){
 }
 
 checkdocker(){
-	return=$(docker info | grep "Root Dir")
-	if [ "$return" == " Docker Root Dir: /media/sdcard/docker" ]; then
-		printf "${green}Docker déjà installé sur la carte SD${normal}\n"
+	is_installed=$(opkg list-installed | grep docker | awk -e '{print $3}' | tr '\n' ' ');
+	#printf "$is_installed"
+	if [ "$is_installed" == "20.10.5 " ]; then
 		docker=1
-		dockeronsdcard=1
-	else
-		if [ "$return" == " Docker Root Dir: /home/docker" ]; then
-			docker=1
-			dockeronsdcard=0
-			printf "${menu}Docker déjà installé sur la flash interne${normal}\n"
+		/etc/init.d/dockerd start
+		sleep 2
+		return=$(docker info | grep "Root Dir")
+		if [[ "$return" =~ "/media/" ]]; then
+			printf "${green}Docker déjà installé sur la carte SD${normal}\n"
+			dockeronsdcard=1
 		else
-			docker=0
-			dockeronsdcard=0
-			printf "${menu}Docker pas installé${normal}\n"
+			if [ "$return" == " Docker Root Dir: /home/docker" ]; then
+				dockeronsdcard=0
+				printf "${menu}Docker déjà installé sur la flash interne${normal}\n"
+			fi
 		fi
-		
-	
-	fi	
+	else
+		docker=0
+		printf "${menu}Docker non installé${normal}\n"
+	fi
 
 }
 
@@ -198,14 +201,7 @@ deletedockercontent(){
 }
 
 uninstalldocker(){
-	printf "${green}Arrêt des containers${normal}\n"
-	docker stop $(docker ps -aq)
-	printf "${green}Suppression des containers${normal}\n"
-	docker rm $(docker ps -aq)
-	printf "${green}Suppression des volumes${normal}\n"
-	docker volume rm $(docker volume ls -q)
-	printf "${green}Suppression des images${normal}\n"
-	docker rmi $(docker images -q)
+	deletedockercontent;
 	printf "${green}Désinstallation de Docker${normal}\n"
 	opkg remove docker
 	printf "${green}Suppression du répertoire de travail Docker${normal}\n"
@@ -240,6 +236,48 @@ formatsdcard() {
 	
 }
 
+
+generatemqttdata() {
+angle=0
+step_angle=5
+vert_plot=0
+horiz_plot=5
+centreline=12
+amplitude=11
+PI=3.14159
+clear
+
+	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
+	read -p "Adresse IP broker [$ipaddress]: " mqttbroker
+	mqttbroker=${mqttbroker:-$ipaddress}
+# Do a single cycle, quantised graph.
+while [ $angle -le 359 ]
+do
+        # Create each floating point value...
+        # CygWin does not have the 'bc' command but it is now catered for... ;o)
+        vert_plot=$(awk "BEGIN{ printf \"%.12f\", ((sin($angle*($PI/180))*$amplitude)+$centreline)}")
+        # vert_plot=$(bc -l <<< "{print ((s($angle*($PI/180))*$amplitude)+$centreline)}")
+        # Truncate the floating point value to an integer then invert the plot to suit the x y co-ordinates inside a terminal...
+        vert_plot=$((24-${vert_plot/.*}))
+        # Plot the point(s) and print the angle at that point...
+        printf "\x1B["$vert_plot";"$horiz_plot"f*"
+        printf "\x1B[22;1fAngle : $angle => message : 'fakedata,location=Roissy,name=Angle value=$angle'"
+		printf "\x1B[23;1fHauteur : $vert_plot => message : 'fakedata,location=Roissy,name=Hauteur value=$vert_plot'"
+		printf "\x1B[24;1fLongueur : $horiz_plot => message : 'fakedata,location=Roissy,name=Longueur value=$horiz_plot'"
+        sleep 1
+        # Increment values...
+        angle=$((angle+step_angle))
+        horiz_plot=$((horiz_plot+1))
+        mosquitto_pub -h $mqttbroker -t wago/fakedata -m "fakedata,location=Roissy,name=Hauteur value=$vert_plot"
+        mosquitto_pub -h $mqttbroker -t wago/fakedata -m "fakedata,location=Roissy,name=Longueur value=$horiz_plot"
+        mosquitto_pub -h $mqttbroker -t wago/fakedata -m "fakedata,location=Roissy,name=Angle value=$angle"
+done
+clear
+printf "${green}Fin de la génération de messages MQTT${normal}\n"
+
+}
+
+
 clear
 show_menu
 while [ $opt != '' ]
@@ -251,23 +289,117 @@ while [ $opt != '' ]
 	  
 		1) clear; 
 			option_picked "Option $opt sélectionnée - Installation automatisée";
-			checkconnectivity;
-			if [ "$internet" -eq "1" ]; then
-				enableipforwarding;
-				enablentp;
-				checkdocker;
-					if [ "$docker" -eq "0" ]; then 
-						installdocker;
-					else
-						if [ "$dockeronsdcard" -eq "0" ]; then 
-						movedockertoSD;
+			printf "${number}Cette installation va réaliser les étapes suivantes :${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Activation de l'IP Forwarding ${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Synchronisation à un serveur NTP ${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Installation de Docker sur la carte SD ${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Installation de Portainer ${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
+			printf "${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+			printf "${number}Lancer l'installation ? [y/n]${normal}\n"
+			 read answer
+			 clear;
+			 if [ "$answer" == "y" ]; then
+				#checkconnectivity; 
+				internet=1;
+				if [ "$internet" -eq "1" ]; then
+					enableipforwarding;
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [ ]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [ ]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [ ]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+				
+					enablentp;
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [ ]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [ ]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					
+					checkdocker;
+						if [ "$docker" -eq "0" ]; then 
+							installdocker;
+						else
+							if [ "$dockeronsdcard" -eq "0" ]; then 
+							movedockertoSD;
+							fi
 						fi
-					fi
-				installmosquitto;
-				installinfluxdb;
-				installtelegraf;
-				installgrafana;
-			fi
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [ ]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					installportainer;
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					installmosquitto;
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					installinfluxdb;
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [X]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					installtelegraf;
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [X]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [X]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					installgrafana;
+					clear;
+					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
+					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
+					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
+					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
+					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
+					printf "\x1B[7;1f${menu} ${number} [X]${menu} Installation de InfluxDB ${normal}\n"
+					printf "\x1B[8;1f${menu} ${number} [X]${menu} Installation de Telegraf ${normal}\n"
+					printf "\x1B[9;1f${menu} ${number} [X]${menu} Installation de Grafana ${normal}\n"
+					printf "\x1B[10;1f${green}Installation automatisée terminée${normal}\n"
+				fi
+			 else
+				 printf "${fgred}Installation automatisée annulée par l'utilisateur${normal}\n"
+			 fi
+			
 			
 			show_menu;
 			;;	
@@ -286,33 +418,36 @@ while [ $opt != '' ]
         ;;
         4) clear;
             option_picked "Option $opt sélectionnée - Installation de Docker sur la carte SD";
-			checkconnectivity;
-			if [ "$internet" -eq "1" ]; then
-				checkdocker;
+			checkdocker;
 				if [ "$docker" -eq "0" ]; then 
-					installdocker;
+					checkconnectivity;
+					if [ "$internet" -eq "1" ]; then
+						installdocker;
+					fi
 				else
 					if [ "$dockeronsdcard" -eq "0" ]; then 
 					movedockertoSD;
 					fi
 				fi
-			fi
+	
             show_menu;
         ;;
 		
 		5) clear;
             option_picked "Option $opt sélectionnée - Installation de Docker sur la flash";
-			checkconnectivity;
-			if [ "$internet" -eq "1" ]; then
+		
 				checkdocker;
 				if [ "$docker" -eq "0" ]; then 
+						checkconnectivity;
+					if [ "$internet" -eq "1" ]; then
 					installdocker;
+					fi
 				else
 					if [ "$dockeronsdcard" -eq "1" ]; then 
 						printf "${fgred}Docker est déjà installé sur la carte SD${normal}\n"		
 					fi
 				fi
-			fi
+			
             show_menu;
         ;;
 		
@@ -376,7 +511,7 @@ while [ $opt != '' ]
         9) clear;
             option_picked "Option $opt sélectionnée - Redémarrage";
             reboot now;
-            printf "PLC will restart";
+            printf "Le contrôleur va redémarrer";
             show_menu;
         ;;
 		
@@ -385,16 +520,21 @@ while [ $opt != '' ]
             formatsdcard;
             show_menu;
         ;;
+		 11) clear;
+			option_picked "Option $opt sélectionnée - Génération de messages MQTT";
+			generatemqttdata;
+			 show_menu;
+		;;
         x) clear;
-            chmod +x menu.sh;
-            printf "Type ./menu.sh to re-open this tool";
+            #chmod +x menu.sh;
+            printf "Saisir ./install.sh pour réouvrir cet outil";
             printf "\n";
             exit;
         ;;
         \n)exit;
         ;;
         *)clear;
-            option_picked "Pick an option from the menu";
+            option_picked "Sélectionner une option dans le menu";
             show_menu;
         ;;
       esac

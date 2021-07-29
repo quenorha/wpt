@@ -13,7 +13,10 @@ Enfin les données sont affichées via l'outil de visualisation Grafana.  \
 Le client MQTT peut aussi bien être interne que distant.  \
 L'outil de gestion de containers Portainer est également installé pour faciliter la maintenance des containers.
 
-Le script bash permet d'automatiser l'installation de Docker sur la carte SD, le téléchargement des images Docker, fichiers de configuration et package nécessaires et leurs installations.
+Le script dispose d'une interface graphique qui permet d'installer indépendamment différentes actions. \
+En sélectionnant la première option, le script automatise l'installation de Docker sur la carte SD, le téléchargement des imagesD ocker, fichiers de configuration et package nécessaires et leurs installations.
+
+Ce projet est en beta - son utilisation relève de votre responsabilité. 
 
 ## Prérequis
 
@@ -29,6 +32,7 @@ Le PFC, Edge Controller ou TP600 doit disposer d'un accès à Internet (penser �
 
 La date et heure du contrôleur doivent être mises à jour pour éviter des erreurs lors de l'échange TLS. 
 Dans le WBM, mettre à jour l'heure dans <em>Configuration / Clock</em> ou spécifier un serveur de temps dans <em>Ports and service / NTP Client</em>
+En sélectionnant la synchronisation à un serveur de temps ou l'installation automatisée, le serveur time.google.com sera automatiquement ajouté.
 
 ## Installation
 Se connecter en SSH au contrôleur via PuTTy par exemple, en tant que super utilisateur (<em>root / wago</em> par défaut, penser à le modifier).
@@ -73,12 +77,17 @@ Le payload du message MQTT doit respecter le format InfluxDB line protocol :
 	
 Dans cet exemple, le payload suivant est publié sur le topic wago/subtopic : 
  ```
-processdata,source=Edge counter=12563signal=-58
+collection1,type=simulation,name=Variable1 value=12
+collection1,type=simulation,name=Variable2 value=5
+...
  ```
 
-### 3) Telegraf
-Le fichier <b>/root/config/telegraf.conf</b> (dans le dossier /root/config) doit être adapté pour renseigner l'adresse IP du broker, ainsi que le topic MQTT. 
+Il est également possible de générer des données en MQTT directement depuis le script. \
+Sélectionner l'<strong>Option 11 Génération de messages MQTT</strong> \
 
+### 3) Telegraf
+A l'installation de Telegraf, l'adresse IP de l'interface X1 est lue et proposée comme adresse de Broker, elle peut être modifiée au profit d'un broker distant. 
+Si besoin le fichier <b>/root/config/telegraf.conf</b> (dans le dossier /root/conf) peut être modifié davantage pour modifier le topic MQTT par exemple.
 Une fois la configuration modifiée, redémarrer le container Telegraf. 
  ```
  docker restart c_telegraf
@@ -93,11 +102,11 @@ docker logs c_telegraf
 Se connecter à la page http://[adresseIPduContrôleur]:3000.  \
 S'authentifier via admin / admin. \
 Le mot de passe doit être modifié à la première connexion.  \
-Aller dans <em>Configuration / Data sources</em> puis cliquer sur <em>Add data source</em>. \
-Sélectionner InfluxDB. \
-Au niveau de l'URL, renseigner http://c_influxdb:8086 \
-Au niveau de <em>Database</em>, renseigner telegraf. Cette base est créée automatiquement par Telegraf. \
-Cliquer sur <em>Save And Test</em>, <em>Data source is working</em> doit s'afficher en vert. 
+La connexion à la base de données InfluxDB est automatiquement configurée à la création du container.
+Un dashboard d'exemple est aussi ajouté, il est disponible dans Dashboards / Manage.
 
 ## Evolution
 Le MQTT doit être sécurisé en mettant en place les certificats TLS. 
+
+## Crédits
+L'interface sous forme de menu est basée sur le [WAGO Provisioning Tool](https://github.com/braunku/pfc-provisioning-tool) de Kurt Braun (braunku) 

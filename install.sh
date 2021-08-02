@@ -361,11 +361,10 @@ while [ $opt != '' ]
 					
 					checkdocker;
 						if [ "$docker" -eq "0" ]; then 
-							installdocker;
-						else
-							if [ "$dockeronsdcard" -eq "0" ]; then 
-							movedockertoSD;
-							fi
+								installdocker;
+						fi
+						if [ "$dockeronsdcard" -eq "0" ]; then 
+								movedockertoSD;
 						fi
 					
 					

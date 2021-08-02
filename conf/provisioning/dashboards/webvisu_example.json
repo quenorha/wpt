@@ -28,7 +28,7 @@
       },
       "id": 16,
       "options": {
-        "content": "<iframe id=\"inlineFrameExample\"\n    title=\"Inline Frame Example\"\n    width =\"640\"\n    height = \"480\"\n    frameborder=\"0\" scrolling=\"no\"\n    src=\"http://[adresseIP]/webvisu/webvisu.htm\">\n</iframe>\n",
+        "content": "<iframe id=\"inlineFrameExample\"\n    title=\"Inline Frame Example\"\n    width =\"640\"\n    height = \"480\"\n    frameborder=\"0\" scrolling=\"no\"\n    src=\"http://adresseIPducontroleur/webvisu/webvisu.htm\">\n</iframe>\n",
         "mode": "html"
       },
       "pluginVersion": "8.0.0",

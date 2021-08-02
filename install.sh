@@ -175,7 +175,7 @@ installgrafana(){
 	if [ "$opt" == "y" ]; then
 		wget $repo/main/conf/provisioning/dashboards/webvisu_example.json -O  /root/conf/provisioning/dashboards/webvisu_example.json
 		ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
-		brokerplaceholder='[adresseIP]'
+		brokerplaceholder='adresseIPducontroleur'
 		sed -i "s/$brokerplaceholder/$ipaddress/g" /root/conf/provisioning/dashboards/webvisu_example.json
 	fi
 	printf "${green}Création du volume v_grafana${normal}\n"

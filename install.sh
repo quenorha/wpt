@@ -28,6 +28,8 @@ show_menu(){
     printf "${menu} ${number} 9)${menu} Redémarrage du contrôleur${normal}\n"
 	printf "${menu} ${number} 10)${menu}Formatage la carte SD${normal}\n"
 	printf "${menu} ${number} 11)${menu}Génération de messages MQTT${normal}\n"
+	printf "${menu} ${number} 12)${menu}Autoriser la webvisu dans un iframe${normal}\n"
+	printf "${menu} ${number} 13)${menu}Configurer la connexion MQTT${normal}\n"
     printf "${menu}*********************************************${normal}\n"
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
     read opt
@@ -163,14 +165,28 @@ installgrafana(){
 	mkdir -p /root/conf/provisioning/
 	mkdir -p /root/conf/provisioning/dashboards
 	mkdir -p /root/conf/provisioning/datasources
+	printf "${number}Autoriser l'ajout de script dans les Text Panels ? [y/n]${normal}"
+    read opt
 	printf "${green}Téléchargement des fichiers de configurations${normal}\n"
 	wget $repo/main/conf/provisioning/dashboards/dashboards.yaml -O  /root/conf/provisioning/dashboards/dashboards.yaml
 	wget $repo/main/conf/provisioning/dashboards/example.json -O  /root/conf/provisioning/dashboards/example.json
+	wget $repo/main/conf/provisioning/dashboards/mqtt_status.json -O  /root/conf/provisioning/dashboards/mqtt_status.json
 	wget $repo/main/conf/provisioning/datasources/influxdb.yaml -O  /root/conf/provisioning/datasources/influxdb.yaml
+	if [ "$opt" == "y" ]; then
+		wget $repo/main/conf/provisioning/dashboards/webvisu_example.json -O  /root/conf/provisioning/dashboards/webvisu_example.json
+		ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
+		brokerplaceholder='[adresseIP]'
+		sed -i "s/$brokerplaceholder/$ipaddress/g" /root/conf/provisioning/dashboards/webvisu_example.json
+	fi
 	printf "${green}Création du volume v_grafana${normal}\n"
 	docker volume create v_grafana
+	
 	printf "${green}Démarrage Grafana${normal}\n"
-	docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:8.0.0
+	if [ "$opt" == "y" ]; then
+		docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:8.0.0
+	else
+		docker run -d -p 3000:3000 --name c_grafana --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:8.0.0
+	fi
 	printf "${green}Grafana démarré${normal}\n"
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	printf "${green}Aller sur http://$ipaddress:3000 pour y accéder${normal}\n"
@@ -186,7 +202,9 @@ installportainer(){
 	printf "${green}Démarrage Portainer${normal}\n"
 	docker run -d -p 8000:8000 -p 9000:9000 --name=c_portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v v_portainer:/data portainer/portainer-ce:2.6.1
 	printf "${green}Portainer démarré${normal}\n"
+	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	printf "${green}Aller sur http://$ipaddress:9000 pour y accéder${normal}\n"
+	printf "${green}En l'absence de connexion au bout de 5 min l'accès sera bloqué par mesure de sécurité${normal}\n"
 }
 
 deletedockercontent(){
@@ -222,6 +240,32 @@ else
 fi	
 }
 
+setbrokerconnection()
+{
+ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
+read -p "Adresse IP broker [$ipaddress]: " mqttbroker
+mqttbroker=${mqttbroker:-$ipaddress}
+ printf "${green}Configuration de la connexion au broker${normal}\n"
+/etc/config-tools/config_cloudconnectivity set -c 1 -p CloudType=AnyMQTT -p ClientId=PFC -p Host=$ipaddress -p Port=1883 -p UseTLS=false -p MessagingProtocol=NativeMQTT -p Enabled=true
+ printf "${green}Redémarrage de la connexion Cloud${normal}\n"
+/etc/init.d/dataagent stop && /etc/init.d/dataagent start
+sleep 2
+printf "${green}Connexion MQTT configurée, pour ajuster les paramètres, aller sur https://$ipaddress/wbm/#/configuration/cloud-connectivity/ccconnection1${normal}\n"
+}
+
+
+
+allowwebvisuiframe()
+{
+ printf "${green}Modification du serveur Web{normal}\n"
+restrict='setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
+allow='#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
+sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode.conf
+printf "${green}Redémarrage du serveur Web${normal}\n"
+printf "${green}Penser à vider le cache du navigateur (CTRL + F5)${normal}\n"
+/etc/init.d/lighttpd stop && /etc/init.d/lighttpd start
+}
+
 
 formatsdcard() {
 	 printf "${number}Formater la carte ? Toutes les données s'y trouvant seront définitivement effacées.[y/n]${normal}\n"
@@ -253,19 +297,22 @@ clear
 # Do a single cycle, quantised graph.
 while [ $angle -le 359 ]
 do
-        # Create each floating point value...
-        # CygWin does not have the 'bc' command but it is now catered for... ;o)
+       
         vert_plot=$(awk "BEGIN{ printf \"%.12f\", ((sin($angle*($PI/180))*$amplitude)+$centreline)}")
-        # vert_plot=$(bc -l <<< "{print ((s($angle*($PI/180))*$amplitude)+$centreline)}")
-        # Truncate the floating point value to an integer then invert the plot to suit the x y co-ordinates inside a terminal...
+       
         vert_plot=$((24-${vert_plot/.*}))
-        # Plot the point(s) and print the angle at that point...
+       
         printf "\x1B["$vert_plot";"$horiz_plot"f*"
-        printf "\x1B[22;1fAngle : $angle => message : 'fakedata,location=Roissy,name=Angle value=$angle'"
-		printf "\x1B[23;1fHauteur : $vert_plot => message : 'fakedata,location=Roissy,name=Hauteur value=$vert_plot'"
-		printf "\x1B[24;1fLongueur : $horiz_plot => message : 'fakedata,location=Roissy,name=Longueur value=$horiz_plot'"
+		#printf "\x1B[24;1f$angle/360"
+        printf "\x1B[25;1fAngle : $angle => message : 'fakedata,location=Roissy,name=Angle value=$angle'"
+		printf "\x1B[26;1fHauteur : $vert_plot => message : 'fakedata,location=Roissy,name=Hauteur value=$vert_plot'"
+		printf "\x1B[27;1fLongueur : $horiz_plot => message : 'fakedata,location=Roissy,name=Longueur value=$horiz_plot'"
+		printf "\x1B[28;1fAppuyer sur n'importe quelle touche pour arrêter..." 
+		if read -r -N 1 -t 1; then
+			break;
+		fi	
         sleep 1
-        # Increment values...
+      
         angle=$((angle+step_angle))
         horiz_plot=$((horiz_plot+1))
         mosquitto_pub -h $mqttbroker -t wago/fakedata -m "fakedata,location=Roissy,name=Hauteur value=$vert_plot"
@@ -300,32 +347,17 @@ while [ $opt != '' ]
 			printf "${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
 			printf "${number}Lancer l'installation ? [y/n]${normal}\n"
 			 read answer
-			 clear;
+			clear
+			
 			 if [ "$answer" == "y" ]; then
-				#checkconnectivity; 
-				internet=1;
+				checkconnectivity; 
+				
 				if [ "$internet" -eq "1" ]; then
 					enableipforwarding;
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [ ]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [ ]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [ ]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					
 				
 					enablentp;
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [ ]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [ ]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+				
 					
 					checkdocker;
 						if [ "$docker" -eq "0" ]; then 
@@ -335,66 +367,22 @@ while [ $opt != '' ]
 							movedockertoSD;
 							fi
 						fi
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [ ]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					
+					
 					installportainer;
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [ ]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					
+					
 					installmosquitto;
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [ ]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					
+					
 					installinfluxdb;
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [X]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [ ]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					
+				
 					installtelegraf;
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [X]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [X]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [ ]${menu} Installation de Grafana ${normal}\n"
+					
+					
 					installgrafana;
-					clear;
-					printf "\x1B[2;1f${menu} ${number} [X]${menu} Activation de l'IP Forwarding ${normal}\n"
-					printf "\x1B[3;1f${menu} ${number} [X]${menu} Synchronisation à un serveur NTP ${normal}\n"
-					printf "\x1B[4;1f${menu} ${number} [X]${menu} Installation de Docker sur la carte SD ${normal}\n"
-					printf "\x1B[5;1f${menu} ${number} [X]${menu} Installation de Portainer ${normal}\n"
-					printf "\x1B[6;1f${menu} ${number} [X]${menu} Installation de Mosquitto ${normal}\n"
-					printf "\x1B[7;1f${menu} ${number} [X]${menu} Installation de InfluxDB ${normal}\n"
-					printf "\x1B[8;1f${menu} ${number} [X]${menu} Installation de Telegraf ${normal}\n"
-					printf "\x1B[9;1f${menu} ${number} [X]${menu} Installation de Grafana ${normal}\n"
-					printf "\x1B[10;1f${green}Installation automatisée terminée${normal}\n"
+					
 				fi
 			 else
 				 printf "${fgred}Installation automatisée annulée par l'utilisateur${normal}\n"
@@ -512,7 +500,6 @@ while [ $opt != '' ]
             option_picked "Option $opt sélectionnée - Redémarrage";
             reboot now;
             printf "Le contrôleur va redémarrer";
-            show_menu;
         ;;
 		
 		 10) clear;
@@ -523,6 +510,18 @@ while [ $opt != '' ]
 		 11) clear;
 			option_picked "Option $opt sélectionnée - Génération de messages MQTT";
 			generatemqttdata;
+			 show_menu;
+		;;
+		
+		12) clear;
+			option_picked "Option $opt sélectionnée - Autorisation des webvisu dans un iframe";
+			allowwebvisuiframe;
+			 show_menu;
+		;;
+		
+		13) clear;
+			option_picked "Option $opt sélectionnée - Configuration de la connexion au broker";
+			setbrokerconnection;
 			 show_menu;
 		;;
         x) clear;

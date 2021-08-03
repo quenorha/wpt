@@ -62,14 +62,18 @@ show_container_menu(){
 }
 
 enableipforwarding(){
+	printf "${green}Activation de l'IP Forwarding${normal}\n";
 	/etc/config-tools/config_routing -c general state=enabled
     printf "${green}IP Forwarding activé${normal}\n";
 }
 
 enablentp(){
+	printf "${green}Ajout du serveur de temps time.google.com${normal}\n";
 	/etc/config-tools/config_sntp state=enabled time-server-1=216.239.35.0 update-time=600
+	printf "${green}Mise à jour de l'heure${normal}\n";
 	/etc/config-tools/config_sntp update
 	printf "${green}Synchronisation NTP configurée${normal}\n";
+	date
 }
 
 checkdocker(){
@@ -287,7 +291,7 @@ if [ "$opt" == "y" ]; then
 		printf "${menu}Iframe déjà autorisée${normal}\n"	
 	fi
 else
-	printf "${green}Modification du serveur Web{normal}\n"
+	printf "${green}Modification du serveur Web${normal}\n"
 	restrict='setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
 	allow='#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
 	sed -i "s/$allow/$restrict/g" /etc/lighttpd/mode_http+https.conf

@@ -67,7 +67,7 @@ enableipforwarding(){
 }
 
 enablentp(){
-	/etc/config-tools/config_sntp state=enable time-server-n=216.239.35.0 update-time=600
+	/etc/config-tools/config_sntp state=enable time-server-1=216.239.35.0 update-time=600
 	/etc/config-tools/config_sntp update
 	printf "${green}Synchronisation NTP configurée${normal}\n";
 }

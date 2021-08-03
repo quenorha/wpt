@@ -26,10 +26,10 @@ show_menu(){
 	printf "${menu} ${number} 7)${menu} Suppression des containers, images et volumes Docker${normal}\n"
 	printf "${menu} ${number} 8)${menu} Désinstallation de Docker${normal}\n"
     printf "${menu} ${number} 9)${menu} Redémarrage du contrôleur${normal}\n"
-	printf "${menu} ${number} 10)${menu}Formatage la carte SD${normal}\n"
+	printf "${menu} ${number} 10)${menu}Formatage de la carte SD${normal}\n"
 	printf "${menu} ${number} 11)${menu}Génération de messages MQTT${normal}\n"
-	printf "${menu} ${number} 12)${menu}Autoriser la webvisu dans un iframe${normal}\n"
-	printf "${menu} ${number} 13)${menu}Configurer la connexion MQTT${normal}\n"
+	printf "${menu} ${number} 12)${menu}Configuration du serveur web et de la webvisualisation${normal}\n"
+	printf "${menu} ${number} 13)${menu}Configuration de la connexion MQTT${normal}\n"
     printf "${menu}*********************************************${normal}\n"
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
     read opt
@@ -67,7 +67,7 @@ enableipforwarding(){
 }
 
 enablentp(){
-	/etc/config-tools/config_sntp state=enable time-server-1=216.239.35.0 update-time=600
+	/etc/config-tools/config_sntp state=enabled time-server-1=216.239.35.0 update-time=600
 	/etc/config-tools/config_sntp update
 	printf "${green}Synchronisation NTP configurée${normal}\n";
 }
@@ -258,10 +258,75 @@ printf "${green}Connexion MQTT configurée, pour ajuster les paramètres, aller 
 
 allowwebvisuiframe()
 {
- printf "${green}Modification du serveur Web{normal}\n"
-restrict='setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
-allow='#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
-sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode.conf
+printf "${number}Autoriser l'intégration de la webvisu dans un iframe ? [y/n]${normal}"
+read opt
+if [ "$opt" == "y" ]; then
+	printf "${green}Modification du serveur Web${normal}\n"
+	restrict='setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
+	allow='#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
+	enable=0
+	result=$(cat /etc/lighttpd/mode_http+https.conf | grep '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")')
+	if [ "$result" != '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")' ]; then
+		sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode_http+https.conf
+	else
+		enable=1
+	fi
+	result=$(cat /etc/lighttpd/mode_https.conf | grep '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")')
+	if [ "$result" != '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")' ]; then
+		sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode_https.conf
+	else
+		enable=1
+	fi
+	result=$(cat /etc/lighttpd/mode_http.conf | grep '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")')
+	if [ "$result" != '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")' ]; then
+		sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode_http.conf
+	else
+		enable=1
+	fi
+	if [ $enable -eq 1 ]; then
+		printf "${menu}Iframe déjà autorisée${normal}\n"	
+	fi
+else
+	printf "${green}Modification du serveur Web{normal}\n"
+	restrict='setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
+	allow='#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
+	sed -i "s/$allow/$restrict/g" /etc/lighttpd/mode_http+https.conf
+	sed -i "s/$allow/$restrict/g" /etc/lighttpd/mode_http.conf
+	sed -i "s/$allow/$restrict/g" /etc/lighttpd/mode_https.conf
+fi
+printf "\n${number}Quels protocoles activer pour le serveur Web${normal}\n"
+printf "${menu} ${number} 1)${menu}HTTPS${normal}\n"
+printf "${menu} ${number} 2)${menu}HTTP${normal}\n"
+printf "${menu} ${number} 3)${menu}HTTP + HTTPS${normal}\n"
+read opt
+ case $opt in
+ 		1) printf "\n${green}Activation du HTTPS${normal}\n" 
+		 /etc/config-tools/config_port port=http state=disabled
+		 /etc/config-tools/config_port port=https state=enabled
+		 	;;	
+		2) printf "\n${green}Activation du HTTP${normal}\n" 
+		 /etc/config-tools/config_port port=http state=enabled
+		 /etc/config-tools/config_port port=https state=disabled
+		 	;;	
+		 3) printf "\n${green}Activation du HTTP et HTTPS${normal}\n" 
+		 /etc/config-tools/config_port port=http state=enabled
+		 /etc/config-tools/config_port port=https state=enabled	
+		 	;;	
+ esac	
+printf "${number}Activer la webvisu ? [y/n]${normal}"
+read opt
+if [ "$opt" == "y" ]; then
+	/etc/config-tools/config_runtime cfg-version=3 webserver-state=enabled
+	printf "${number}Désactiver l'authentification sur la webvisu ? [y/n]${normal}"
+	read opt
+	if [ "$opt" == "y" ]; then
+		/etc/config-tools/config_runtime cfg-version=3 authentication=disabled
+	else
+		/etc/config-tools/config_runtime cfg-version=3 authentication=enabled
+	fi
+else
+	/etc/config-tools/config_runtime cfg-version=3 webserver-state=disabled	
+fi
 printf "${green}Redémarrage du serveur Web${normal}\n"
 printf "${green}Penser à vider le cache du navigateur (CTRL + F5)${normal}\n"
 /etc/init.d/lighttpd stop && /etc/init.d/lighttpd start
@@ -514,7 +579,7 @@ while [ $opt != '' ]
 		;;
 		
 		12) clear;
-			option_picked "Option $opt sélectionnée - Autorisation des webvisu dans un iframe";
+			option_picked "Option $opt sélectionnée - Configuration du serveur web et de la webvisualisation";
 			allowwebvisuiframe;
 			 show_menu;
 		;;

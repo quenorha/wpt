@@ -55,7 +55,7 @@ show_container_menu(){
     printf "${menu} ${number} c)${menu} Installation de Telegraf ${normal}\n"
     printf "${menu} ${number} d)${menu} Installation de Grafana ${normal}\n"
     printf "${menu} ${number} e)${menu}Installation de Portainer ${normal}\n"
-    printf "${menu} ${number} 8)${menu} Menu Principal ${normal}\n"
+    printf "${menu} ${number} f)${menu} Menu Principal ${normal}\n"
     printf "${menu}*********************************************${normal}\n"
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
     read opt
@@ -480,6 +480,7 @@ while [ $opt != '' ]
 					checkconnectivity;
 					if [ "$internet" -eq "1" ]; then
 						installdocker;
+						movedockertoSD;
 					fi
 				else
 					if [ "$dockeronsdcard" -eq "0" ]; then 
@@ -550,6 +551,11 @@ while [ $opt != '' ]
 			fi
            show_container_menu;
         ;;
+		f) clear;
+           option_picked "Option $opt sélectionnée - Retour au menu principal ";
+           
+          show_menu;
+        ;;
         6) clear; # Docker sub-menu
             option_picked "Option $opt sélectionnée - Installation de containers";
             printf "Select Container";
@@ -560,7 +566,7 @@ while [ $opt != '' ]
 			deletedockercontent;
             show_menu;
         ;; 
-		8) clear; # Return to main menu
+		8) clear; 
 			option_picked "Option $opt sélectionnée - Désinstallation de Docker";
 			uninstalldocker;
             show_menu;

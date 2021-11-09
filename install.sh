@@ -135,7 +135,7 @@ installmosquitto(){
 	mkdir -p /root/conf
 	wget $repo/main/conf/mosquitto.conf -O /root/conf/mosquitto.conf 
 	printf "${green}Démarrage Mosquitto${normal}\n"
-	docker run -d -p 1883:1883 -p 9001:9001 --restart=unless-stopped --name c_mosquitto -v /root/conf/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2.0.11
+	docker run -d -p 1883:1883 -p 9001:9001 --restart=unless-stopped --name c_mosquitto -v /root/conf/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:latest
 }
 
 installtelegraf(){
@@ -188,9 +188,9 @@ installgrafana(){
 	
 	printf "${green}Démarrage Grafana${normal}\n"
 	if [ "$opt" == "y" ]; then
-		docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:8.0.0
+		docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:latest
 	else
-		docker run -d -p 3000:3000 --name c_grafana --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:8.0.0
+		docker run -d -p 3000:3000 --name c_grafana --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:latest
 	fi
 	printf "${green}Grafana démarré${normal}\n"
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
@@ -205,7 +205,7 @@ installportainer(){
 	printf "${green}Création du volume v_portainer${normal}\n"
 	docker volume create v_portainer
 	printf "${green}Démarrage Portainer${normal}\n"
-	docker run -d -p 8000:8000 -p 9000:9000 --name=c_portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v v_portainer:/data portainer/portainer-ce:2.6.1
+	docker run -d -p 8000:8000 -p 9000:9000 --name=c_portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v v_portainer:/data portainer/portainer-ce:latest
 	printf "${green}Portainer démarré${normal}\n"
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	printf "${green}Aller sur http://$ipaddress:9000 pour y accéder${normal}\n"

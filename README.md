@@ -1,4 +1,4 @@
-# WAGO Provisionning Tool
+# WAGO Provisioning Tool
 
 ## Description
 Ce dépôt contient tout le nécessaire pour installer l'ensemble de containers suivant l'architecture suivante : 

@@ -41,7 +41,7 @@ Se connecter en SSH au contrôleur via PuTTy par exemple, en tant que super util
 Exécuter la commande suivante qui permet le téléchargement de ce script, lui donne les droits d'exécution et l'exécute.
 
 ```
-wget https://raw.githubusercontent.com/quenorha/wpt/main/install.sh -O $PWD/install.sh && chmod +x $PWD/install.sh && $PWD/install.sh
+curl https://raw.githubusercontent.com/quenorha/wpt/main/install.sh -o $PWD/install.sh -s && chmod +x $PWD/install.sh && $PWD/install.sh
 ```
 
 Le menu interactif ci-dessous doit apparaître :

@@ -119,10 +119,10 @@ installdocker(){
 	
 	
 	printf "${green}Téléchargement du package Docker${normal}\n"
-	wget https://github.com/WAGO/docker-ipk/releases/download/v1.0.4-beta/docker_20.10.5_armhf.ipk -O /tmp/docker_20.10.5_armhf.ipk 
+	curl https://github.com/WAGO/docker-ipk/releases/download/v1.0.4-beta/docker_20.10.5_armhf.ipk -o /tmp/docker_20.10.5_armhf.ipk -s
 	printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
 	mkdir -p /root/conf
-	wget $repo/main/conf/daemon.json -O /root/conf/daemon.json
+	curl $repo/main/conf/daemon.json -o /root/conf/daemon.json -s
 	printf "${green}Installation Docker${normal}\n"
 	opkg install /tmp/docker_20.10.5_armhf.ipk
 	docker=1
@@ -133,7 +133,7 @@ installdocker(){
 installmosquitto(){
 	printf "${green}Téléchargement du fichier de configuration mosquitto.conf${normal}\n"
 	mkdir -p /root/conf
-	wget $repo/main/conf/mosquitto.conf -O /root/conf/mosquitto.conf 
+	curl $repo/main/conf/mosquitto.conf -o /root/conf/mosquitto.conf -s
 	printf "${green}Démarrage Mosquitto${normal}\n"
 	docker run -d -p 1883:1883 -p 9001:9001 --restart=unless-stopped --name c_mosquitto -v /root/conf/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:latest
 }
@@ -142,7 +142,7 @@ installtelegraf(){
 	docker network create wago
 	printf "${green}Téléchargement du fichier de configuration telegraf.conf${normal}\n"
 	mkdir -p /root/conf
-	wget $repo/main/conf/telegraf.conf.template -O /root/conf/telegraf.conf.template
+	curl $repo/main/conf/telegraf.conf.template -o /root/conf/telegraf.conf.template -s
 	brokerplaceholder='adresseipdubroker'	#default placeholder in telegraf.conf.template
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 	read -p "Adresse IP broker [$ipaddress]: " mqttbroker
@@ -173,12 +173,12 @@ installgrafana(){
 	printf "${number}Autoriser l'ajout de script dans les Text Panels ? [y/n]${normal}"
     read opt
 	printf "${green}Téléchargement des fichiers de configurations${normal}\n"
-	wget $repo/main/conf/provisioning/dashboards/dashboards.yaml -O  /root/conf/provisioning/dashboards/dashboards.yaml
-	wget $repo/main/conf/provisioning/dashboards/example.json -O  /root/conf/provisioning/dashboards/example.json
-	wget $repo/main/conf/provisioning/dashboards/mqtt_status.json -O  /root/conf/provisioning/dashboards/mqtt_status.json
-	wget $repo/main/conf/provisioning/datasources/influxdb.yaml -O  /root/conf/provisioning/datasources/influxdb.yaml
+	curl $repo/main/conf/provisioning/dashboards/dashboards.yaml -o /root/conf/provisioning/dashboards/dashboards.yaml -s
+	curl $repo/main/conf/provisioning/dashboards/example.json -o /root/conf/provisioning/dashboards/example.json -s
+	curl $repo/main/conf/provisioning/dashboards/mqtt_status.json -o  /root/conf/provisioning/dashboards/mqtt_status.json -s
+	curl $repo/main/conf/provisioning/datasources/influxdb.yaml -o  /root/conf/provisioning/datasources/influxdb.yaml -s
 	if [ "$opt" == "y" ]; then
-		wget $repo/main/conf/provisioning/dashboards/webvisu_example.json -O  /root/conf/provisioning/dashboards/webvisu_example.json
+		curl $repo/main/conf/provisioning/dashboards/webvisu_example.json -o  /root/conf/provisioning/dashboards/webvisu_example.json -s
 		ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
 		brokerplaceholder='adresseIPducontroleur'
 		sed -i "s/$brokerplaceholder/$ipaddress/g" /root/conf/provisioning/dashboards/webvisu_example.json

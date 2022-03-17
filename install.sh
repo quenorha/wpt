@@ -342,7 +342,7 @@ formatsdcard() {
 	 read answer
 	 if [ "$answer" == "y" ]; then
 		 printf "${number}Formatage de la carte SD en cours ...${normal}\n"
-		/etc/config-tools/format_medium device=/dev/mmcblk0p1 volume-name=wago fs-type=ext4
+		/etc/config-tools/format_medium device=/dev/mmcblk0 volume-name=wago fs-type=ext4
 		printf "${green}Carte SD formatée.${normal}\n"
 	 else
 		 printf "${fgred}Formatage de la carte SD annulé par l'utilisateur${normal}\n"

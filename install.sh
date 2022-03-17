@@ -77,11 +77,10 @@ enablentp(){
 }
 
 checkdocker(){
-	is_installed=$(opkg list-installed | grep docker | awk -e '{print $3}' | tr '\n' ' ');
-	#printf "$is_installed"
-	if [ "$is_installed" == "20.10.5 " ]; then
-		docker=1
-		/etc/init.d/dockerd start
+	#is_installed=$(opkg list-installed | grep docker | awk -e '{print $3}' | tr '\n' ' ');
+	if docker -v > /dev/null 2>&1; then
+       docker=1
+		/etc/init.d/dockerd start &
 		sleep 2
 		return=$(docker info | grep "Root Dir")
 		if [[ "$return" =~ "/media/" ]]; then
@@ -93,41 +92,51 @@ checkdocker(){
 				printf "${menu}Docker déjà installé sur la flash interne${normal}\n"
 			fi
 		fi
-	else
-		docker=0
+    else
+        docker=0
 		printf "${menu}Docker non installé${normal}\n"
-	fi
+    fi
 
 }
 
 movedockertoSD() {
 	printf "${green}Déplacement docker vers la carte SD${normal}\n"
 	printf "${green}Arrêt Docker${normal}\n"
-	/etc/init.d/dockerd stop
-	sleep 3
+	/etc/init.d/dockerd stop &
+	#sleep 3
+	printf "${green}Copie répertoire flash vers carte SD ${normal}\n"
 	cp -r /home/docker /media/sd
 	#rm -r /home/docker
+	printf "${green}Modification de la configuration de Docker ${normal}\n"
 	cp /root/conf/daemon.json /etc/docker/daemon.json
-	rm /tmp/docker_20.10.5_armhf.ipk
-	printf "${green}Démarrage Docker${normal}\n"
-	/etc/init.d/dockerd start
-	sleep 3
+	#rm /tmp/docker_20.10.5_armhf.ipk
+	checkdocker
+	#sleep 3
 	docker ps -a
 }
 
 installdocker(){
 	
+	if [ -f "/etc/config-tools/config_docker" ]; then #Docker installation embedded from >FW20 on PFC
+		printf "${green}Installation Docker (via script config-tools) ${normal}\n"
+       /etc/config-tools/config_docker install
+	   /etc/config-tools/config_docker activate
+	   
+	else
+		printf "${green}Téléchargement du package Docker${normal}\n"
+		curl -L https://github.com/WAGO/docker-ipk/releases/download/v1.0.4-beta/docker_20.10.5_armhf.ipk -o /tmp/docker_20.10.5_armhf.ipk
+		printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
+		mkdir -p /root/conf
+		curl -L $repo/main/conf/daemon.json -o /root/conf/daemon.json -s
+		printf "${green}Installation Docker${normal}\n"
+		opkg install /tmp/docker_20.10.5_armhf.ipk
 	
-	printf "${green}Téléchargement du package Docker${normal}\n"
-	curl -L https://github.com/WAGO/docker-ipk/releases/download/v1.0.4-beta/docker_20.10.5_armhf.ipk -o /tmp/docker_20.10.5_armhf.ipk
-	printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
-	mkdir -p /root/conf
-	curl -L $repo/main/conf/daemon.json -o /root/conf/daemon.json -s
-	printf "${green}Installation Docker${normal}\n"
-	opkg install /tmp/docker_20.10.5_armhf.ipk
+    fi
 	docker=1
 	dockeronsdcard=0;
-	printf "${green}Docker installé${normal}\n"
+	printf "${green}Docker installé${normal}\n"  
+	
+	
 }
 
 installmosquitto(){
@@ -226,9 +235,21 @@ deletedockercontent(){
 uninstalldocker(){
 	deletedockercontent;
 	printf "${green}Désinstallation de Docker${normal}\n"
-	opkg remove docker
+	if [ -f "/etc/config-tools/config_docker" ]; then #Docker installation embedded from >FW20 on PFC
+		printf "${green}Désinstallation Docker (via script config-tools) ${normal}\n"
+       /etc/config-tools/config_docker remove
+	   /etc/config-tools/config_docker deactivate
+	else
+		printf "${green}Désinstallation Docker (via opkg) ${normal}\n"
+		opkg remove docker
+	fi
 	printf "${green}Suppression du répertoire de travail Docker${normal}\n"
-	rm -r /media/sd/docker
+	if [ "$dockeronsdcard" -eq "1" ]; then 
+		rm -r /media/sd/docker
+	else	
+		rm -r /home/docker
+	fi
+	
 }
 
 

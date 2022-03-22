@@ -40,8 +40,14 @@ Se connecter en SSH au contrôleur via PuTTy par exemple, en tant que super util
 
 Exécuter la commande suivante qui permet le téléchargement de ce script, lui donne les droits d'exécution et l'exécute.
 
+### >= Firmware 20
+
 ```
 curl https://raw.githubusercontent.com/quenorha/wpt/main/install.sh -o $PWD/install.sh -s && chmod +x $PWD/install.sh && $PWD/install.sh
+```
+### <= Firmware 19
+```
+wget https://raw.githubusercontent.com/quenorha/wpt/main/install_fw19.sh -O $PWD/install_fw19.sh && chmod +x $PWD/install_fw19.sh && $PWD/install_fw19.sh
 ```
 
 Le menu interactif ci-dessous doit apparaître :

@@ -160,7 +160,7 @@ installtelegraf(){
 	sed -i "s/$brokerplaceholder/$mqttbroker/g" /root/conf/telegraf.conf
 	printf "${green}Fichier telegraf.conf généré${normal}\n"
 	printf "${green}Démarrage Telegraf${normal}\n"
-	docker run -d --restart=unless-stopped  --net=wago  --name=c_telegraf -v /root/conf/telegraf.conf:/etc/telegraf/telegraf.conf:ro telegraf:1.19.1
+	docker run -d --restart=unless-stopped  --net=wago  --name=c_telegraf -v /root/conf/telegraf.conf:/etc/telegraf/telegraf.conf:ro telegraf:latest
 	printf "${green}Telegraf démarré${normal}\n"
 }
 
@@ -169,7 +169,7 @@ installinfluxdb(){
 	printf "${green}Création du volume v_influxdb${normal}\n"
 	docker volume create v_influxdb
 	printf "${green}Démarrage InfluxDB${normal}\n"
-	docker run -d -p 8086:8086 --name c_influxdb --net=wago --restart unless-stopped -v v_influxdb influxdb:1.8.6
+	docker run -d -p 8086:8086 --name c_influxdb --net=wago --restart unless-stopped -v v_influxdb:/var/lib/influxdb influxdb:1.8.10
 	printf "${green}InfluxDB démarré${normal}\n"
 }
 
@@ -214,10 +214,10 @@ installportainer(){
 	printf "${green}Création du volume v_portainer${normal}\n"
 	docker volume create v_portainer
 	printf "${green}Démarrage Portainer${normal}\n"
-	docker run -d -p 8000:8000 -p 9000:9000 --name=c_portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v v_portainer:/data portainer/portainer-ce:latest
+	docker run -d -p 8000:8000 -p 9443:9443 --name=c_portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v v_portainer:/data portainer/portainer-ce:2.9.3
 	printf "${green}Portainer démarré${normal}\n"
 	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
-	printf "${green}Aller sur http://$ipaddress:9000 pour y accéder${normal}\n"
+	printf "${green}Aller sur https://$ipaddress:9443 pour y accéder${normal}\n"
 	printf "${green}En l'absence de connexion au bout de 5 min l'accès sera bloqué par mesure de sécurité${normal}\n"
 }
 

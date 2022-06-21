@@ -89,8 +89,8 @@ checkdocker(){
 	#is_installed=$(opkg list-installed | grep docker | awk -e '{print $3}' | tr '\n' ' ');
 	if docker -v > /dev/null 2>&1; then
        docker=1
-		/etc/init.d/dockerd start &
-		sleep 2
+		/etc/init.d/dockerd start
+		wait
 		return=$(docker info | grep "Root Dir")
 		if [[ "$return" =~ "/media/" ]]; then
 			printf "${green}Docker déjà installé sur la carte SD${normal}\n"
@@ -112,7 +112,7 @@ movedockertoSD() {
 	printf "${green}Déplacement docker vers la carte SD${normal}\n"
 	printf "${green}Arrêt Docker${normal}\n"
 	/etc/init.d/dockerd stop &
-	#sleep 3
+	wait
 	printf "${green}Copie répertoire flash vers carte SD ${normal}\n"
 	cp -r /home/docker /media/sd
 	#rm -r /home/docker

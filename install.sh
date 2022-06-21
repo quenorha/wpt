@@ -2,6 +2,14 @@
 
 	repo=https://raw.githubusercontent.com/quenorha/wpt
 
+
+   grafanaimage=$"grafana/grafana-oss"
+   portainerimage=$"portainer/portainer-ce:2.9.3"
+   influxdbimage=$"influxdb:1.8.10"
+   telegrafsnmpimage=$"quenorha/telegrafsnmp:arm"
+   telegrafmqttimage=$"telegraf"
+   mosquittoimage=$"eclipse-mosquitto"
+
    normal=`echo "\033[m"`
     menu=`echo "\033[36m"` #blue
     number=`echo "\033[33m"` #yellow
@@ -52,10 +60,11 @@ show_container_menu(){
     printf "\n${menu}********* Containers Docker ***********${normal}\n"
     printf "${menu} ${number} a)${menu} Installation de Mosquitto ${normal}\n"
     printf "${menu} ${number} b)${menu} Installation de InfluxDB ${normal}\n"
-    printf "${menu} ${number} c)${menu} Installation de Telegraf ${normal}\n"
+    printf "${menu} ${number} c)${menu} Installation de Telegraf (MQTT) ${normal}\n"
     printf "${menu} ${number} d)${menu} Installation de Grafana ${normal}\n"
     printf "${menu} ${number} e)${menu}Installation de Portainer ${normal}\n"
-    printf "${menu} ${number} f)${menu} Menu Principal ${normal}\n"
+    printf "${menu} ${number} f)${menu} Installation de Telegraf (SNMP) ${normal}\n"	
+    printf "${menu} ${number} g)${menu} Menu Principal ${normal}\n"
     printf "${menu}*********************************************${normal}\n"
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
     read opt
@@ -140,27 +149,21 @@ installdocker(){
 }
 
 installmosquitto(){
+	docker network create wago
 	printf "${green}Téléchargement du fichier de configuration mosquitto.conf${normal}\n"
 	mkdir -p /root/conf
 	curl -L $repo/main/conf/mosquitto.conf -o /root/conf/mosquitto.conf -s
 	printf "${green}Démarrage Mosquitto${normal}\n"
-	docker run -d -p 1883:1883 -p 9001:9001 --restart=unless-stopped --name c_mosquitto -v /root/conf/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:latest
+	docker run -d -p 1883:1883 -p 9001:9001 --restart=unless-stopped --net=wago --name c_mosquitto -v /root/conf/mosquitto.conf:/mosquitto/config/mosquitto.conf "$mosquittoimage"
 }
 
-installtelegraf(){
+installtelegrafmqtt(){
 	docker network create wago
 	printf "${green}Téléchargement du fichier de configuration telegraf.conf${normal}\n"
 	mkdir -p /root/conf
-	curl -L $repo/main/conf/telegraf.conf.template -o /root/conf/telegraf.conf.template -s
-	brokerplaceholder='adresseipdubroker'	#default placeholder in telegraf.conf.template
-	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
-	read -p "Adresse IP broker [$ipaddress]: " mqttbroker
-	mqttbroker=${mqttbroker:-$ipaddress}
-	cp /root/conf/telegraf.conf.template /root/conf/telegraf.conf
-	sed -i "s/$brokerplaceholder/$mqttbroker/g" /root/conf/telegraf.conf
-	printf "${green}Fichier telegraf.conf généré${normal}\n"
+	curl -L $repo/main/conf/telegrafmqtt.conf -o /root/conf/telegrafmqtt.conf -s
 	printf "${green}Démarrage Telegraf${normal}\n"
-	docker run -d --restart=unless-stopped  --net=wago  --name=c_telegraf -v /root/conf/telegraf.conf:/etc/telegraf/telegraf.conf:ro telegraf:latest
+	docker run -d --restart=unless-stopped  --net=wago  --name=c_telegrafmqtt -v /root/conf/telegrafmqtt.conf:/etc/telegraf/telegraf.conf:ro "$telegrafmqttimage"
 	printf "${green}Telegraf démarré${normal}\n"
 }
 
@@ -169,7 +172,7 @@ installinfluxdb(){
 	printf "${green}Création du volume v_influxdb${normal}\n"
 	docker volume create v_influxdb
 	printf "${green}Démarrage InfluxDB${normal}\n"
-	docker run -d -p 8086:8086 --name c_influxdb --net=wago --restart unless-stopped -v v_influxdb:/var/lib/influxdb influxdb:1.8.10
+	docker run -d -p 8086:8086 --name c_influxdb --net=wago --restart unless-stopped -v v_influxdb:/var/lib/influxdb "$influxdbimage"
 	printf "${green}InfluxDB démarré${normal}\n"
 }
 
@@ -188,7 +191,7 @@ installgrafana(){
 	curl -L $repo/main/conf/provisioning/datasources/influxdb.yaml -o  /root/conf/provisioning/datasources/influxdb.yaml -s
 	if [ "$opt" == "y" ]; then
 		curl -L $repo/main/conf/provisioning/dashboards/webvisu_example.json -o  /root/conf/provisioning/dashboards/webvisu_example.json -s
-		ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
+		ipaddress=$(/etc/config-tools/get_actual_eth_config X1 ip-address)
 		brokerplaceholder='adresseIPducontroleur'
 		sed -i "s/$brokerplaceholder/$ipaddress/g" /root/conf/provisioning/dashboards/webvisu_example.json
 	fi
@@ -196,14 +199,14 @@ installgrafana(){
 	docker volume create v_grafana
 	
 	printf "${green}Démarrage Grafana${normal}\n"
+	
 	if [ "$opt" == "y" ]; then
-		docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:latest
+		docker run -d -p 3000:3000 --name c_grafana -e GF_PANELS_DISABLE_SANITIZE_HTML=true --net=wago --restart unless-stopped -v v_grafana:/var/lib/grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ "$grafanaimage"
 	else
-		docker run -d -p 3000:3000 --name c_grafana --net=wago --restart unless-stopped -v v_grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ grafana/grafana:latest
+		docker run -d -p 3000:3000 --name c_grafana --net=wago --restart unless-stopped -v v_grafana:/var/lib/grafana -v /root/conf/provisioning/:/etc/grafana/provisioning/ "$grafanaimage"
 	fi
 	printf "${green}Grafana démarré${normal}\n"
-	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
-	printf "${green}Aller sur http://$ipaddress:3000 pour y accéder${normal}\n"
+	printf "${green}Aller sur https://[adresseIP]:3000 pour y accéder${normal}\n"
 	printf "${green}A la première connexion, se connecter avec admin/admin${normal}\n"
 	printf "${green}Une datasource renvoyant vers la base Influxdb a été automatiquement ajoutée${normal}\n"
 	printf "${green}Un exemple de dashboard est disponible en naviguant vers Dashboards/Manage${normal}\n"
@@ -214,12 +217,25 @@ installportainer(){
 	printf "${green}Création du volume v_portainer${normal}\n"
 	docker volume create v_portainer
 	printf "${green}Démarrage Portainer${normal}\n"
-	docker run -d -p 8000:8000 -p 9443:9443 --name=c_portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v v_portainer:/data portainer/portainer-ce:2.9.3
+	docker run -d -p 8000:8000 -p 9443:9443 --name=c_portainer --restart=always -v /var/run/docker.sock:/var/run/docker.sock -v v_portainer:/data "$portainerimage"
 	printf "${green}Portainer démarré${normal}\n"
-	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
-	printf "${green}Aller sur https://$ipaddress:9443 pour y accéder${normal}\n"
+	printf "${green}Aller sur https://[adresseIP]:9443 pour y accéder${normal}\n"
 	printf "${green}En l'absence de connexion au bout de 5 min l'accès sera bloqué par mesure de sécurité${normal}\n"
 }
+
+
+installtelegrafsnmp(){
+	docker network create wago
+	printf "${green}Téléchargement du fichier de configuration telegraf.conf pour SNMP ${normal}\n"
+	mkdir -p /root/conf
+	curl -L https://raw.githubusercontent.com/quenorha/snmp_monitoring/main/telegrafsnmp.conf  -o /root/conf/telegrafsnmp.conf -s
+	printf "${green}Fichier telegraf.conf généré${normal}\n"
+	printf "${green}Démarrage Telegraf${normal}\n"
+	docker run -d --net=wago --restart=unless-stopped --name=c_telegrafsnmp -v /root/conf/telegrafsnmp.conf:/etc/telegraf/telegraf.conf:ro "$telegrafsnmpimage"	
+	printf "${green}Telegraf SNMP démarré${normal}\n"
+}
+
+
 
 deletedockercontent(){
 	printf "${green}Arrêt des containers${normal}\n"
@@ -268,7 +284,7 @@ fi
 
 setbrokerconnection()
 {
-ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
+ipaddress=$(/etc/config-tools/get_actual_eth_config X1 ip-address)
 read -p "Adresse IP broker [$ipaddress]: " mqttbroker
 mqttbroker=${mqttbroker:-$ipaddress}
  printf "${green}Configuration de la connexion au broker${normal}\n"
@@ -382,7 +398,7 @@ amplitude=11
 PI=3.14159
 clear
 
-	ipaddress=$(/etc/config-tools/get_eth_config X1 ip-address)
+	ipaddress=$(/etc/config-tools/get_actual_eth_config X1 ip-address)
 	read -p "Adresse IP broker [$ipaddress]: " mqttbroker
 	mqttbroker=${mqttbroker:-$ipaddress}
 # Do a single cycle, quantised graph.
@@ -468,11 +484,12 @@ while [ $opt != '' ]
 					installinfluxdb;
 					
 				
-					installtelegraf;
+					installtelegrafmqtt;
 					
 					
 					installgrafana;
 					
+					docker ps -a;
 				fi
 			 else
 				 printf "${fgred}Installation automatisée annulée par l'utilisateur${normal}\n"
@@ -549,10 +566,10 @@ while [ $opt != '' ]
         ;;
 		
 		c) clear;
-            option_picked "Option $opt sélectionnée - Installation de Telegraf";
+            option_picked "Option $opt sélectionnée - Installation de Telegraf (MQTT)";
             checkconnectivity;
 			if [ "$internet" -eq "1" ]; then
-				installtelegraf;
+				installtelegrafmqtt;
 			fi
             show_container_menu;
         ;;
@@ -573,6 +590,15 @@ while [ $opt != '' ]
            show_container_menu;
         ;;
 		f) clear;
+           option_picked "Option $opt sélectionnée - Installation de Telegraf SNMP";
+            checkconnectivity;
+			if [ "$internet" -eq "1" ]; then
+				installtelegrafsnmp;
+			fi
+           show_container_menu;
+        ;;
+		
+		g) clear;
            option_picked "Option $opt sélectionnée - Retour au menu principal ";
            
           show_menu;

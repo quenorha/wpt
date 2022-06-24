@@ -8,6 +8,7 @@
    influxdbimage=$"influxdb:1.8.10"
    telegrafsnmpimage=$"quenorha/telegrafsnmp:arm"
    telegrafmqttimage=$"telegraf"
+   telegrafdockerimage=$"telegraf"
    mosquittoimage=$"eclipse-mosquitto"
 
    normal=`echo "\033[m"`
@@ -30,7 +31,7 @@ show_menu(){
 	printf "${menu} ${number} 3)${menu} Synchronisation à un serveur NTP ${normal}\n"
     printf "${menu} ${number} 4)${menu} Installation de Docker sur la carte SD ${normal}\n"
 	printf "${menu} ${number} 5)${menu} Installation de Docker sur la flash${normal}\n"
-	printf "${menu} ${number} 6)${menu} Installation de containers${normal}\n"
+	printf "${menu} ${number} 6)${menu} Installation de containers > ${normal}\n"
 	printf "${menu} ${number} 7)${menu} Suppression des containers, images et volumes Docker${normal}\n"
 	printf "${menu} ${number} 8)${menu} Désinstallation de Docker${normal}\n"
     printf "${menu} ${number} 9)${menu} Redémarrage du contrôleur${normal}\n"
@@ -62,9 +63,10 @@ show_container_menu(){
     printf "${menu} ${number} b)${menu} Installation de InfluxDB ${normal}\n"
     printf "${menu} ${number} c)${menu} Installation de Telegraf (MQTT) ${normal}\n"
     printf "${menu} ${number} d)${menu} Installation de Grafana ${normal}\n"
-    printf "${menu} ${number} e)${menu}Installation de Portainer ${normal}\n"
+    printf "${menu} ${number} e)${menu} Installation de Portainer ${normal}\n"
     printf "${menu} ${number} f)${menu} Installation de Telegraf (SNMP) ${normal}\n"	
-    printf "${menu} ${number} g)${menu} Menu Principal ${normal}\n"
+    printf "${menu} ${number} g)${menu} Installation de Telegraf (Docker) ${normal}\n"	
+    printf "${menu} ${number} h)${menu} Menu Principal ${normal}\n"
     printf "${menu}*********************************************${normal}\n"
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
     read opt
@@ -159,11 +161,21 @@ installmosquitto(){
 
 installtelegrafmqtt(){
 	docker network create wago
-	printf "${green}Téléchargement du fichier de configuration telegraf.conf${normal}\n"
+	printf "${green}Téléchargement du fichier de configuration telegrafmqtt.conf${normal}\n"
 	mkdir -p /root/conf
 	curl -L $repo/main/conf/telegrafmqtt.conf -o /root/conf/telegrafmqtt.conf -s
 	printf "${green}Démarrage Telegraf${normal}\n"
 	docker run -d --restart=unless-stopped  --net=wago  --name=c_telegrafmqtt -v /root/conf/telegrafmqtt.conf:/etc/telegraf/telegraf.conf:ro "$telegrafmqttimage"
+	printf "${green}Telegraf démarré${normal}\n"
+}
+
+installtelegrafdocker(){
+	docker network create wago
+	printf "${green}Téléchargement du fichier de configuration telegrafdocker.conf${normal}\n"
+	mkdir -p /root/conf
+	curl -L $repo/main/conf/telegrafdocker.conf -o /root/conf/telegrafdocker.conf -s
+	printf "${green}Démarrage Telegraf${normal}\n"
+	docker run -d --user telegraf:$(stat -t /var/run/docker.sock | awk '{ print $6 }') --net=wago --restart=unless-stopped --name=c_telegrafdocker -v /var/run/docker.sock:/var/run/docker.sock -v /root/config/telegrafdocker.conf:/etc/telegraf/telegraf.conf:ro "$telegrafdockerimage"
 	printf "${green}Telegraf démarré${normal}\n"
 }
 
@@ -597,8 +609,15 @@ while [ $opt != '' ]
 			fi
            show_container_menu;
         ;;
-		
 		g) clear;
+           option_picked "Option $opt sélectionnée - Installation de Telegraf Docker";
+            checkconnectivity;
+			if [ "$internet" -eq "1" ]; then
+				installtelegrafdocker;
+			fi
+           show_container_menu;
+        ;;
+		h) clear;
            option_picked "Option $opt sélectionnée - Retour au menu principal ";
            
           show_menu;
@@ -610,15 +629,24 @@ while [ $opt != '' ]
         ;;
         7) clear;
             option_picked "Option $opt sélectionnée - Suppression des containers, images et volumes Docker";
-			deletedockercontent;
+			printf "${number}Supprimer les containers, images et volumes Docker ? Toutes les données seront définitivement effacées.[y/n]${normal}\n"
+			read answer
+			if [ "$answer" == "y" ]; then
+				deletedockercontent;
+			fi	
             show_menu;
         ;; 
 		8) clear; 
+			option_picked "Option $opt sélectionnée - Suppression des containers, images et volumes Docker";
+			printf "${number}Désinstaller Docker et supprimer les containers, images et volumes ? Toutes les données seront définitivement effacées.[y/n]${normal}\n"
+			read answer
+			if [ "$answer" == "y" ]; then
 			option_picked "Option $opt sélectionnée - Désinstallation de Docker";
 			uninstalldocker;
+			fi
             show_menu;
         ;;
-        9) clear;
+		9) clear;
             option_picked "Option $opt sélectionnée - Redémarrage";
             reboot now;
             printf "Le contrôleur va redémarrer";

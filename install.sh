@@ -119,6 +119,8 @@ movedockertoSD() {
 	cp -r /home/docker /media/sd
 	#rm -r /home/docker
 	printf "${green}Modification de la configuration de Docker ${normal}\n"
+	printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
+		curl -L $repo/main/conf/daemon.json -o /root/conf/daemon.json
 	cp /root/conf/daemon.json /etc/docker/daemon.json
 	#rm /tmp/docker_20.10.5_armhf.ipk
 	checkdocker

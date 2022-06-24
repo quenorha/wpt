@@ -91,14 +91,14 @@ checkdocker(){
 	#is_installed=$(opkg list-installed | grep docker | awk -e '{print $3}' | tr '\n' ' ');
 	if docker -v > /dev/null 2>&1; then
        docker=1
-		/etc/init.d/dockerd start
+		/etc/init.d/dockerd start &
 		wait
-		return=$(docker info | grep "Root Dir")
+		return=$(docker system info --format '{{.DockerRootDir}}')
 		if [[ "$return" =~ "/media/" ]]; then
 			printf "${green}Docker déjà installé sur la carte SD${normal}\n"
 			dockeronsdcard=1
 		else
-			if [ "$return" == " Docker Root Dir: /home/docker" ]; then
+			if [[ "$return" =~ "/home/docker" ]]; then
 				dockeronsdcard=0
 				printf "${menu}Docker déjà installé sur la flash interne${normal}\n"
 			fi
@@ -112,18 +112,22 @@ checkdocker(){
 
 movedockertoSD() {
 	printf "${green}Déplacement docker vers la carte SD${normal}\n"
-	printf "${green}Arrêt Docker${normal}\n"
-	/etc/init.d/dockerd stop &
-	wait
+	
 	printf "${green}Copie répertoire flash vers carte SD ${normal}\n"
 	cp -r /home/docker /media/sd
 	#rm -r /home/docker
 	printf "${green}Modification de la configuration de Docker ${normal}\n"
 	printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
-		curl -L $repo/main/conf/daemon.json -o /root/conf/daemon.json
+	curl -L $repo/main/conf/daemon.json -o /root/conf/daemon.json
+	
 	cp /root/conf/daemon.json /etc/docker/daemon.json
-	#rm /tmp/docker_20.10.5_armhf.ipk
+	cat /root/conf/daemon.json &
+	printf "${green}Redémarrage Docker${normal}\n"
+	/etc/init.d/dockerd stop && /etc/init.d/dockerd start
 	checkdocker
+	#rm /tmp/docker_20.10.5_armhf.ipk
+	
+	
 	#sleep 3
 	docker ps -a
 }

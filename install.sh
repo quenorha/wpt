@@ -181,7 +181,7 @@ installtelegrafdocker(){
 	mkdir -p /root/conf
 	curl -L $repo/main/conf/telegrafdocker.conf -o /root/conf/telegrafdocker.conf -s
 	printf "${green}Démarrage Telegraf${normal}\n"
-	docker run -d --user telegraf:$(stat -t /var/run/docker.sock | awk '{ print $6 }') --net=wago --restart=unless-stopped --name=c_telegrafdocker -v /var/run/docker.sock:/var/run/docker.sock -v /root/config/telegrafdocker.conf:/etc/telegraf/telegraf.conf:ro "$telegrafdockerimage"
+	docker run -d --user telegraf:$(stat -t /var/run/docker.sock | awk '{ print $6 }') --net=wago --restart=unless-stopped --name=c_telegrafdocker -v /var/run/docker.sock:/var/run/docker.sock -v /root/conf/telegrafdocker.conf:/etc/telegraf/telegraf.conf:ro "$telegrafdockerimage"
 	printf "${green}Telegraf démarré${normal}\n"
 }
 

@@ -483,6 +483,8 @@ while [ $opt != '' ]
 					
 				
 					enablentp;
+					
+					formatsdcard();
 				
 					
 					checkdocker;

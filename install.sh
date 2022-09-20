@@ -118,6 +118,7 @@ movedockertoSD() {
 	#rm -r /home/docker
 	printf "${green}Modification de la configuration de Docker ${normal}\n"
 	printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
+	mkdir -p /root/conf
 	curl -L $repo/main/conf/daemon.json -o /root/conf/daemon.json
 	
 	cp /root/conf/daemon.json /etc/docker/daemon.json

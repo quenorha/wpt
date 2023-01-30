@@ -37,7 +37,6 @@ show_menu(){
     printf "${menu} ${number} 9)${menu} Redémarrage du contrôleur${normal}\n"
 	printf "${menu} ${number} 10)${menu}Formatage de la carte SD${normal}\n"
 	printf "${menu} ${number} 11)${menu}Génération de messages MQTT${normal}\n"
-	printf "${menu} ${number} 12)${menu}Configuration du serveur web et de la webvisualisation${normal}\n"
 	printf "${menu} ${number} 13)${menu}Configuration de la connexion MQTT${normal}\n"
     printf "${menu}*********************************************${normal}\n"
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
@@ -71,6 +70,16 @@ show_container_menu(){
     printf "Sélectionner une option ou ${fgred}x pour quitter. ${normal}"
     read opt
 }
+
+checkifsdcardproperlymounted()
+{ return=$(mount | grep /dev/mmcblk0p1 | awk -F" " '{print $3}')
+		if [[ "$return" =~ "/media/" ]]; then
+			printf "${green}Carte SD correctement montée${normal}\n"
+		else
+			 printf "${fgred}Carte SD mal montée${normal}\n"
+		fi
+}
+
 
 enableipforwarding(){
 	printf "${green}Activation de l'IP Forwarding${normal}\n";
@@ -111,6 +120,9 @@ checkdocker(){
 }
 
 movedockertoSD() {
+
+    
+
 	printf "${green}Déplacement docker vers la carte SD${normal}\n"
 	
 	printf "${green}Copie répertoire flash vers carte SD ${normal}\n"
@@ -124,12 +136,12 @@ movedockertoSD() {
 	cp /root/conf/daemon.json /etc/docker/daemon.json
 	cat /root/conf/daemon.json &
 	printf "${green}Redémarrage Docker${normal}\n"
-	/etc/init.d/dockerd stop && /etc/init.d/dockerd start
+	/etc/init.d/dockerd restart
+	while ! pidof dockerd > /dev/null; do
+    echo "Waiting for Docker daemon to start..."
+    sleep 5
+    done
 	checkdocker
-	#rm /tmp/docker_20.10.5_armhf.ipk
-	
-	
-	#sleep 3
 	docker ps -a
 }
 
@@ -137,17 +149,19 @@ installdocker(){
 	
 	if [ -f "/etc/config-tools/config_docker" ]; then #Docker installation embedded from >FW20 on PFC
 		printf "${green}Installation Docker (via script config-tools) ${normal}\n"
-       /etc/config-tools/config_docker install
-	   /etc/config-tools/config_docker activate
+       /etc/config-tools/config_docker install && /etc/config-tools/config_docker activate
+	    while ! pidof dockerd > /dev/null; do
+		echo "Waiting for Docker daemon to start..."
+		sleep 5
+		done
 	   
 	else
 		printf "${green}Téléchargement du package Docker${normal}\n"
-		curl -L https://github.com/WAGO/docker-ipk/releases/download/v1.0.4-beta/docker_20.10.5_armhf.ipk -o /tmp/docker_20.10.5_armhf.ipk
+		curl -L https://github.com/WAGO/docker-ipk/releases/download/v1.0.5-beta/docker_20.10.14_armhf.ipk -o /tmp/docker_20.10.14_armhf.ipk
 		printf "${green}Téléchargement du fichier de configuration Docker${normal}\n"
 		mkdir -p /root/conf
-		curl -L $repo/main/conf/daemon.json -o /root/conf/daemon.json -s
 		printf "${green}Installation Docker${normal}\n"
-		opkg install /tmp/docker_20.10.5_armhf.ipk
+		opkg install /tmp/docker_20.10.14_armhf.ipk
 	
     fi
 	docker=1
@@ -158,7 +172,7 @@ installdocker(){
 }
 
 installmosquitto(){
-	docker network create wago
+	docker network inspect wago >/dev/null 2>&1 || docker network create --driver bridge wago
 	printf "${green}Téléchargement du fichier de configuration mosquitto.conf${normal}\n"
 	mkdir -p /root/conf
 	curl -L $repo/main/conf/mosquitto.conf -o /root/conf/mosquitto.conf -s
@@ -167,7 +181,7 @@ installmosquitto(){
 }
 
 installtelegrafmqtt(){
-	docker network create wago
+	docker network inspect wago >/dev/null 2>&1 || docker network create --driver bridge wago
 	printf "${green}Téléchargement du fichier de configuration telegrafmqtt.conf${normal}\n"
 	mkdir -p /root/conf
 	curl -L $repo/main/conf/telegrafmqtt.conf -o /root/conf/telegrafmqtt.conf -s
@@ -177,7 +191,7 @@ installtelegrafmqtt(){
 }
 
 installtelegrafdocker(){
-	docker network create wago
+	docker network inspect wago >/dev/null 2>&1 || docker network create --driver bridge wago
 	printf "${green}Téléchargement du fichier de configuration telegrafdocker.conf${normal}\n"
 	mkdir -p /root/conf
 	curl -L $repo/main/conf/telegrafdocker.conf -o /root/conf/telegrafdocker.conf -s
@@ -187,7 +201,7 @@ installtelegrafdocker(){
 }
 
 installinfluxdb(){
-	docker network create wago
+	docker network inspect wago >/dev/null 2>&1 || docker network create --driver bridge wago
 	printf "${green}Création du volume v_influxdb${normal}\n"
 	docker volume create v_influxdb
 	printf "${green}Démarrage InfluxDB${normal}\n"
@@ -196,7 +210,7 @@ installinfluxdb(){
 }
 
 installgrafana(){
-	docker network create wago
+	docker network inspect wago >/dev/null 2>&1 || docker network create --driver bridge wago
 	mkdir -p /root/conf
 	mkdir -p /root/conf/provisioning/
 	mkdir -p /root/conf/provisioning/dashboards
@@ -244,7 +258,7 @@ installportainer(){
 
 
 installtelegrafsnmp(){
-	docker network create wago
+	docker network inspect wago >/dev/null 2>&1 || docker network create --driver bridge wago
 	printf "${green}Téléchargement du fichier de configuration telegraf.conf pour SNMP ${normal}\n"
 	mkdir -p /root/conf
 	curl -L https://raw.githubusercontent.com/quenorha/snmp_monitoring/main/telegrafsnmp.conf  -o /root/conf/telegrafsnmp.conf -s
@@ -272,8 +286,8 @@ uninstalldocker(){
 	printf "${green}Désinstallation de Docker${normal}\n"
 	if [ -f "/etc/config-tools/config_docker" ]; then #Docker installation embedded from >FW20 on PFC
 		printf "${green}Désinstallation Docker (via script config-tools) ${normal}\n"
-       /etc/config-tools/config_docker remove
-	   /etc/config-tools/config_docker deactivate
+       /etc/config-tools/config_docker deactivate
+	   /etc/config-tools/config_docker remove
 	else
 		printf "${green}Désinstallation Docker (via opkg) ${normal}\n"
 		opkg remove docker
@@ -316,89 +330,13 @@ printf "${green}Connexion MQTT configurée, pour ajuster les paramètres, aller 
 
 
 
-allowwebvisuiframe()
-{
-printf "${number}Autoriser l'intégration de la webvisu dans un iframe ? [y/n]${normal}"
-read opt
-if [ "$opt" == "y" ]; then
-	printf "${green}Modification du serveur Web${normal}\n"
-	restrict='setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
-	allow='#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
-	enable=0
-	result=$(cat /etc/lighttpd/mode_http+https.conf | grep '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")')
-	if [ "$result" != '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")' ]; then
-		sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode_http+https.conf
-	else
-		enable=1
-	fi
-	result=$(cat /etc/lighttpd/mode_https.conf | grep '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")')
-	if [ "$result" != '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")' ]; then
-		sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode_https.conf
-	else
-		enable=1
-	fi
-	result=$(cat /etc/lighttpd/mode_http.conf | grep '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")')
-	if [ "$result" != '#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")' ]; then
-		sed -i "s/$restrict/$allow/g" /etc/lighttpd/mode_http.conf
-	else
-		enable=1
-	fi
-	if [ $enable -eq 1 ]; then
-		printf "${menu}Iframe déjà autorisée${normal}\n"	
-	fi
-else
-	printf "${green}Modification du serveur Web${normal}\n"
-	restrict='setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
-	allow='#setenv.add-response-header  += ("X-Frame-Options" => "SAMEORIGIN")'
-	sed -i "s/$allow/$restrict/g" /etc/lighttpd/mode_http+https.conf
-	sed -i "s/$allow/$restrict/g" /etc/lighttpd/mode_http.conf
-	sed -i "s/$allow/$restrict/g" /etc/lighttpd/mode_https.conf
-fi
-printf "\n${number}Quels protocoles activer pour le serveur Web${normal}\n"
-printf "${menu} ${number} 1)${menu}HTTPS${normal}\n"
-printf "${menu} ${number} 2)${menu}HTTP${normal}\n"
-printf "${menu} ${number} 3)${menu}HTTP + HTTPS${normal}\n"
-read opt
- case $opt in
- 		1) printf "\n${green}Activation du HTTPS${normal}\n" 
-		 /etc/config-tools/config_port port=http state=disabled
-		 /etc/config-tools/config_port port=https state=enabled
-		 	;;	
-		2) printf "\n${green}Activation du HTTP${normal}\n" 
-		 /etc/config-tools/config_port port=http state=enabled
-		 /etc/config-tools/config_port port=https state=disabled
-		 	;;	
-		 3) printf "\n${green}Activation du HTTP et HTTPS${normal}\n" 
-		 /etc/config-tools/config_port port=http state=enabled
-		 /etc/config-tools/config_port port=https state=enabled	
-		 	;;	
- esac	
-printf "${number}Activer la webvisu ? [y/n]${normal}"
-read opt
-if [ "$opt" == "y" ]; then
-	/etc/config-tools/config_runtime cfg-version=3 webserver-state=enabled
-	printf "${number}Désactiver l'authentification sur la webvisu ? [y/n]${normal}"
-	read opt
-	if [ "$opt" == "y" ]; then
-		/etc/config-tools/config_runtime cfg-version=3 authentication=disabled
-	else
-		/etc/config-tools/config_runtime cfg-version=3 authentication=enabled
-	fi
-else
-	/etc/config-tools/config_runtime cfg-version=3 webserver-state=disabled	
-fi
-printf "${green}Redémarrage du serveur Web${normal}\n"
-printf "${green}Penser à vider le cache du navigateur (CTRL + F5)${normal}\n"
-/etc/init.d/lighttpd stop && /etc/init.d/lighttpd start
-}
-
-
 formatsdcard() {
 	 printf "${number}Formater la carte ? Toutes les données s'y trouvant seront définitivement effacées.[y/n]${normal}\n"
 	 read answer
 	 if [ "$answer" == "y" ]; then
 		 printf "${number}Formatage de la carte SD en cours ...${normal}\n"
-		/etc/config-tools/format_medium device=/dev/mmcblk0 volume-name=wago fs-type=ext4
+		/etc/config-tools/format_medium device=/dev/mmcblk0 volume-name=sd fs-type=ext4
+		wait
 		printf "${green}Carte SD formatée.${normal}\n"
 	 else
 		 printf "${fgred}Formatage de la carte SD annulé par l'utilisateur${normal}\n"
@@ -673,12 +611,6 @@ while [ $opt != '' ]
 		;;
 		
 		12) clear;
-			option_picked "Option $opt sélectionnée - Configuration du serveur web et de la webvisualisation";
-			allowwebvisuiframe;
-			 show_menu;
-		;;
-		
-		13) clear;
 			option_picked "Option $opt sélectionnée - Configuration de la connexion au broker";
 			setbrokerconnection;
 			 show_menu;

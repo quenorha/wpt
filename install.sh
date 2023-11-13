@@ -3,7 +3,7 @@
 	repo=https://raw.githubusercontent.com/quenorha/wpt
 
 
-   grafanaimage=$"grafana/grafana-oss"
+   grafanaimage=$"grafana/grafana-oss:10.1.2"
    portainerimage=$"portainer/portainer-ce:2.9.3"
    influxdbimage=$"influxdb:1.8.10"
    telegrafsnmpimage=$"quenorha/telegrafsnmp:arm"
